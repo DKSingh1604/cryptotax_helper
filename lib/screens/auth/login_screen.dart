@@ -12,17 +12,18 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _repository = CryptoRepository();
-  
+
   late AnimationController _fadeAnimationController;
   late AnimationController _slideAnimationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
 
@@ -37,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       duration: AppConstants.mediumAnimationDuration,
       vsync: this,
     );
-    
+
     _slideAnimationController = AnimationController(
       duration: AppConstants.longAnimationDuration,
       vsync: this,
@@ -76,20 +77,21 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       await _repository.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      
+
       if (mounted) {
         Helpers.showSnackBar(context, 'Welcome back!');
+        // Navigation is handled automatically by AuthWrapper
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         Helpers.showSnackBar(
-          context, 
+          context,
           _repository.getAuthErrorMessage(e),
           isError: true,
         );
@@ -97,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     } catch (e) {
       if (mounted) {
         Helpers.showSnackBar(
-          context, 
+          context,
           'An unexpected error occurred. Please try again.',
           isError: true,
         );
@@ -129,31 +131,31 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 40),
-                  
+
                   // Header
                   _buildHeader(),
                   const SizedBox(height: 48),
-                  
+
                   // Login Form
                   _buildLoginForm(),
                   const SizedBox(height: 24),
-                  
+
                   // Login Button
                   _buildLoginButton(),
                   const SizedBox(height: 16),
-                  
+
                   // Forgot Password
                   _buildForgotPassword(),
                   const SizedBox(height: 32),
-                  
+
                   // Divider
                   _buildDivider(),
                   const SizedBox(height: 32),
-                  
+
                   // Google Sign In
                   _buildGoogleSignIn(),
                   const SizedBox(height: 32),
-                  
+
                   // Sign Up Link
                   _buildSignUpLink(),
                 ],
@@ -172,16 +174,19 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         Text(
           'Welcome Back!',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
         Text(
           'Sign in to continue managing your crypto portfolio',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
         ),
       ],
     );
@@ -199,14 +204,15 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             validator: Helpers.validateEmail,
             decoration: InputDecoration(
               labelText: AppStrings.email,
-              prefixIcon: Icon(Icons.email_outlined, color: Theme.of(context).colorScheme.primary),
+              prefixIcon: Icon(Icons.email_outlined,
+                  color: Theme.of(context).colorScheme.primary),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadius),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Password Field
           TextFormField(
             controller: _passwordController,
@@ -214,13 +220,18 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             validator: Helpers.validatePassword,
             decoration: InputDecoration(
               labelText: AppStrings.password,
-              prefixIcon: Icon(Icons.lock_outline, color: Theme.of(context).colorScheme.primary),
+              prefixIcon: Icon(Icons.lock_outline,
+                  color: Theme.of(context).colorScheme.primary),
               suffixIcon: IconButton(
                 icon: Icon(
                   _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
-                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                onPressed: () =>
+                    setState(() => _isPasswordVisible = !_isPasswordVisible),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadius),
@@ -256,7 +267,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                   ),
                 ),
               )
-            : const Text(AppStrings.login, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            : const Text(AppStrings.login,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -276,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
 
   void _showForgotPasswordDialog() {
     final emailController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -284,7 +296,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter your email address to receive a password reset link.'),
+            const Text(
+                'Enter your email address to receive a password reset link.'),
             const SizedBox(height: 16),
             TextFormField(
               controller: emailController,
@@ -304,22 +317,36 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           ElevatedButton(
             onPressed: () async {
               final email = emailController.text.trim();
-              if (email.isNotEmpty) {
+              if (email.isNotEmpty && Helpers.validateEmail(email) == null) {
                 try {
                   await _repository.sendPasswordResetEmail(email);
                   Navigator.pop(context);
                   if (mounted) {
                     Helpers.showSnackBar(context, 'Password reset email sent!');
                   }
+                } on FirebaseAuthException catch (e) {
+                  if (mounted) {
+                    Helpers.showSnackBar(
+                      context,
+                      _repository.getAuthErrorMessage(e),
+                      isError: true,
+                    );
+                  }
                 } catch (e) {
                   if (mounted) {
                     Helpers.showSnackBar(
-                      context, 
+                      context,
                       'Error sending reset email. Please try again.',
                       isError: true,
                     );
                   }
                 }
+              } else {
+                Helpers.showSnackBar(
+                  context,
+                  'Please enter a valid email address.',
+                  isError: true,
+                );
               }
             },
             child: const Text('Send Reset Link'),
@@ -332,17 +359,30 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.2))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'or',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
           ),
         ),
-        Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.2))),
       ],
     );
   }
@@ -353,7 +393,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       height: 56,
       child: OutlinedButton.icon(
         onPressed: _loginWithGoogle,
-        icon: Icon(Icons.g_mobiledata, color: Theme.of(context).colorScheme.primary, size: 28),
+        icon: Icon(Icons.g_mobiledata,
+            color: Theme.of(context).colorScheme.primary, size: 28),
         label: Text(
           AppStrings.signInWithGoogle,
           style: TextStyle(
@@ -380,8 +421,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           Text(
             AppStrings.dontHaveAccount,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
           ),
           TextButton(
             onPressed: () {

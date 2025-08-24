@@ -11,18 +11,20 @@ class SignupScreen extends StatefulWidget {
   State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMixin {
+class _SignupScreenState extends State<SignupScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _displayNameController = TextEditingController();
   final _repository = CryptoRepository();
-  
+
   late AnimationController _fadeAnimationController;
   late AnimationController _slideAnimationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  
+
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
@@ -38,7 +40,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       duration: AppConstants.mediumAnimationDuration,
       vsync: this,
     );
-    
+
     _slideAnimationController = AnimationController(
       duration: AppConstants.longAnimationDuration,
       vsync: this,
@@ -69,6 +71,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _displayNameController.dispose();
     _fadeAnimationController.dispose();
     _slideAnimationController.dispose();
     super.dispose();
@@ -88,20 +91,25 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       await _repository.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        displayName: _displayNameController.text.trim().isNotEmpty
+            ? _displayNameController.text.trim()
+            : null,
       );
-      
+
       if (mounted) {
-        Helpers.showSnackBar(context, 'Account created successfully! Welcome aboard!');
+        Helpers.showSnackBar(
+            context, 'Account created successfully! Welcome aboard!');
+        // Navigation is handled automatically by AuthWrapper
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
         Helpers.showSnackBar(
-          context, 
+          context,
           _repository.getAuthErrorMessage(e),
           isError: true,
         );
@@ -109,7 +117,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
     } catch (e) {
       if (mounted) {
         Helpers.showSnackBar(
-          context, 
+          context,
           'An unexpected error occurred. Please try again.',
           isError: true,
         );
@@ -134,7 +142,8 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onSurface),
+          icon: Icon(Icons.arrow_back,
+              color: Theme.of(context).colorScheme.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -149,27 +158,27 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 20),
-                  
+
                   // Header
                   _buildHeader(),
                   const SizedBox(height: 48),
-                  
+
                   // Signup Form
                   _buildSignupForm(),
                   const SizedBox(height: 24),
-                  
+
                   // Signup Button
                   _buildSignupButton(),
                   const SizedBox(height: 32),
-                  
+
                   // Divider
                   _buildDivider(),
                   const SizedBox(height: 32),
-                  
+
                   // Google Sign In
                   _buildGoogleSignIn(),
                   const SizedBox(height: 32),
-                  
+
                   // Login Link
                   _buildLoginLink(),
                 ],
@@ -188,16 +197,19 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         Text(
           'Create Account',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
         Text(
           'Join thousands of crypto investors tracking their taxes',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
         ),
       ],
     );
@@ -208,6 +220,21 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       key: _formKey,
       child: Column(
         children: [
+          // Display Name Field
+          TextFormField(
+            controller: _displayNameController,
+            keyboardType: TextInputType.name,
+            decoration: InputDecoration(
+              labelText: 'Display Name (Optional)',
+              prefixIcon: Icon(Icons.person_outline,
+                  color: Theme.of(context).colorScheme.primary),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // Email Field
           TextFormField(
             controller: _emailController,
@@ -215,14 +242,15 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             validator: Helpers.validateEmail,
             decoration: InputDecoration(
               labelText: AppStrings.email,
-              prefixIcon: Icon(Icons.email_outlined, color: Theme.of(context).colorScheme.primary),
+              prefixIcon: Icon(Icons.email_outlined,
+                  color: Theme.of(context).colorScheme.primary),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadius),
               ),
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Password Field
           TextFormField(
             controller: _passwordController,
@@ -230,13 +258,18 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             validator: Helpers.validatePassword,
             decoration: InputDecoration(
               labelText: AppStrings.password,
-              prefixIcon: Icon(Icons.lock_outline, color: Theme.of(context).colorScheme.primary),
+              prefixIcon: Icon(Icons.lock_outline,
+                  color: Theme.of(context).colorScheme.primary),
               suffixIcon: IconButton(
                 icon: Icon(
                   _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
-                onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                onPressed: () =>
+                    setState(() => _isPasswordVisible = !_isPasswordVisible),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadius),
@@ -244,7 +277,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Confirm Password Field
           TextFormField(
             controller: _confirmPasswordController,
@@ -252,13 +285,20 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             validator: _validateConfirmPassword,
             decoration: InputDecoration(
               labelText: AppStrings.confirmPassword,
-              prefixIcon: Icon(Icons.lock_outline, color: Theme.of(context).colorScheme.primary),
+              prefixIcon: Icon(Icons.lock_outline,
+                  color: Theme.of(context).colorScheme.primary),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  _isConfirmPasswordVisible
+                      ? Icons.visibility_off
+                      : Icons.visibility,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
-                onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+                onPressed: () => setState(() =>
+                    _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppConstants.borderRadius),
@@ -294,7 +334,8 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                   ),
                 ),
               )
-            : const Text(AppStrings.signup, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            : const Text(AppStrings.signup,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -302,17 +343,30 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.2))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             'or',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
           ),
         ),
-        Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+        Expanded(
+            child: Divider(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.2))),
       ],
     );
   }
@@ -323,7 +377,8 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       height: 56,
       child: OutlinedButton.icon(
         onPressed: _signupWithGoogle,
-        icon: Icon(Icons.g_mobiledata, color: Theme.of(context).colorScheme.primary, size: 28),
+        icon: Icon(Icons.g_mobiledata,
+            color: Theme.of(context).colorScheme.primary, size: 28),
         label: Text(
           AppStrings.signInWithGoogle,
           style: TextStyle(
@@ -350,8 +405,11 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
           Text(
             AppStrings.alreadyHaveAccount,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
