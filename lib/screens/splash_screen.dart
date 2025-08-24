@@ -1,3 +1,4 @@
+import 'package:cryptotax_helper/screens/auth/auth_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:cryptotax_helper/screens/auth/login_screen.dart';
 import 'package:cryptotax_helper/utils/constants.dart';
@@ -52,8 +53,10 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const AuthWrapper(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
             },
             transitionDuration: AppConstants.mediumAnimationDuration,
@@ -108,10 +111,14 @@ class _SplashScreenState extends State<SplashScreen>
                               Theme.of(context).colorScheme.secondary,
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(AppConstants.largeBorderRadius),
+                          borderRadius: BorderRadius.circular(
+                              AppConstants.largeBorderRadius),
                           boxShadow: [
                             BoxShadow(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.3),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
@@ -124,26 +131,32 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 32),
-                      
+
                       // App Name
                       Text(
                         AppConstants.appName,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       // Tagline
                       Text(
                         'Your crypto tax companion',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                        ),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.7),
+                            ),
                       ),
                       const SizedBox(height: 48),
-                      
+
                       // Loading indicator
                       SizedBox(
                         width: 40,
