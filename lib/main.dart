@@ -4,6 +4,8 @@ import 'package:cryptotax_helper/theme.dart';
 import 'package:cryptotax_helper/screens/auth/auth_wrapper.dart';
 import 'package:cryptotax_helper/utils/constants.dart';
 import 'package:cryptotax_helper/firebase_options.dart';
+import 'package:cryptotax_helper/services/crypto_repository.dart';
+import 'package:cryptotax_helper/models/user_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,13 +20,38 @@ class CryptoTaxHelperApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.dark, // Default to dark mode as requested
-      home: const AuthWrapper(),
+    final repo = CryptoRepository();
+    // First listen to auth; only subscribe to settings when authenticated.
+    return StreamBuilder(
+      stream: repo.authStateChanges,
+      builder: (context, authSnap) {
+        final isLoggedIn = authSnap.data != null;
+        if (!isLoggedIn) {
+          return MaterialApp(
+            title: AppConstants.appName,
+            debugShowCheckedModeBanner: false,
+            theme: lightTheme,
+            darkTheme: darkTheme,
+            themeMode: ThemeMode.dark,
+            home: const AuthWrapper(),
+          );
+        }
+
+        return StreamBuilder<UserSettings?>(
+          stream: repo.getUserSettings(),
+          builder: (context, settingsSnap) {
+            final isDark = settingsSnap.data?.isDarkMode ?? true;
+            return MaterialApp(
+              title: AppConstants.appName,
+              debugShowCheckedModeBanner: false,
+              theme: lightTheme,
+              darkTheme: darkTheme,
+              themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+              home: const AuthWrapper(),
+            );
+          },
+        );
+      },
     );
   }
 }

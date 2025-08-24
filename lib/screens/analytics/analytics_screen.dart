@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cryptotax_helper/models/portfolio.dart';
 import 'package:cryptotax_helper/models/user_settings.dart';
-import 'package:cryptotax_helper/services/storage_service.dart';
-import 'package:cryptotax_helper/services/mock_data_service.dart';
+import 'package:cryptotax_helper/services/crypto_repository.dart';
 import 'package:cryptotax_helper/widgets/crypto_chart.dart';
 import 'package:cryptotax_helper/utils/constants.dart';
 import 'package:cryptotax_helper/utils/helpers.dart';
@@ -20,7 +19,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   UserSettings _settings = UserSettings();
   List<ChartData> _profitLossData = [];
   bool _isLoading = true;
-  
+  final _repository = CryptoRepository();
+
   String _selectedPeriod = '30D';
   final List<String> _periods = ['7D', '30D', '90D', '1Y'];
 
@@ -35,16 +35,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
   Future<void> _loadData() async {
     try {
-      final settings = await StorageService.getUserSettings();
-      final transactions = await StorageService.getTransactions();
-      final portfolio = MockDataService.calculatePortfolioFromTransactions(transactions);
-      
-      // Generate chart data based on selected period
+      final settings = await _repository.getUserSettings().first;
+      final portfolio = await _repository.getUserPortfolio().first;
+
+      // For now, synthesize a simple line using portfolio value (placeholder)
       final days = _getPeriodDays(_selectedPeriod);
-      final profitLossData = MockDataService.generateProfitLossChart(days: days);
+      final List<ChartData> profitLossData = [];
+      final base = (portfolio?.totalValue ?? 1000).clamp(0, double.infinity);
+      for (int i = days; i >= 0; i--) {
+        profitLossData.add(ChartData(
+            date: DateTime.now().subtract(Duration(days: i)),
+            value: base * (1 + (i - days / 2) * 0.003)));
+      }
 
       setState(() {
-        _settings = settings;
+        _settings = settings ?? UserSettings();
         _portfolio = portfolio;
         _profitLossData = profitLossData;
         _isLoading = false;
@@ -52,7 +57,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        Helpers.showSnackBar(context, 'Error loading analytics: $e', isError: true);
+        Helpers.showSnackBar(context, 'Error loading analytics: $e',
+            isError: true);
       }
     }
   }
@@ -83,7 +89,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -105,7 +111,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Icon(Icons.arrow_drop_down, color: Theme.of(context).colorScheme.primary),
+                Icon(Icons.arrow_drop_down,
+                    color: Theme.of(context).colorScheme.primary),
               ],
             ),
             itemBuilder: (context) {
@@ -119,7 +126,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           ),
         ],
       ),
-      body: _isLoading 
+      body: _isLoading
           ? _buildLoadingScreen()
           : SingleChildScrollView(
               padding: AppConstants.screenPadding,
@@ -129,19 +136,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   // Portfolio Overview
                   _buildPortfolioOverview(),
                   const SizedBox(height: 24),
-                  
+
                   // Profit/Loss Chart
                   ProfitLossChart(
                     data: _profitLossData,
                     isDarkMode: _settings.isDarkMode,
                   ),
                   const SizedBox(height: 24),
-                  
+
                   // Portfolio Distribution Chart
                   if (_portfolio != null && _portfolio!.holdings.isNotEmpty)
                     PortfolioDistributionChart(holdings: _portfolio!.holdings),
                   const SizedBox(height: 24),
-                  
+
                   // Holdings List
                   _buildHoldingsList(),
                 ],
@@ -155,13 +162,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+          CircularProgressIndicator(
+              color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 16),
           Text(
             'Loading analytics...',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
           ),
         ],
       ),
@@ -190,12 +201,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           Text(
             'Portfolio Performance',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-            ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
               Expanded(
@@ -205,20 +215,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     Text(
                       'Total Value',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                      ),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer
+                                .withValues(alpha: 0.8),
+                          ),
                     ),
                     Text(
-                      Helpers.formatCurrency(_portfolio!.totalValue, _settings.currency),
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
+                      Helpers.formatCurrency(
+                          _portfolio!.totalValue, _settings.currency),
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                              ),
                     ),
                   ],
                 ),
               ),
-              
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -226,24 +242,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     children: [
                       Icon(
                         Helpers.getProfitLossIcon(_portfolio!.totalProfitLoss),
-                        color: Helpers.getProfitLossColor(_portfolio!.totalProfitLoss, _settings.isDarkMode),
+                        color: Helpers.getProfitLossColor(
+                            _portfolio!.totalProfitLoss, _settings.isDarkMode),
                         size: 20,
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        Helpers.formatPercentage(_portfolio!.profitLossPercentage),
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Helpers.getProfitLossColor(_portfolio!.totalProfitLoss, _settings.isDarkMode),
-                        ),
+                        Helpers.formatPercentage(
+                            _portfolio!.profitLossPercentage),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Helpers.getProfitLossColor(
+                                      _portfolio!.totalProfitLoss,
+                                      _settings.isDarkMode),
+                                ),
                       ),
                     ],
                   ),
                   Text(
-                    Helpers.formatCurrency(_portfolio!.totalProfitLoss, _settings.currency),
+                    Helpers.formatCurrency(
+                        _portfolio!.totalProfitLoss, _settings.currency),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimaryContainer
+                              .withValues(alpha: 0.8),
+                        ),
                   ),
                 ],
               ),
@@ -265,12 +290,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         Text(
           'Your Holdings',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
         const SizedBox(height: 16),
-        
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -302,8 +326,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppConstants.smallBorderRadius),
+              color:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius:
+                  BorderRadius.circular(AppConstants.smallBorderRadius),
             ),
             child: Icon(
               Icons.currency_bitcoin,
@@ -312,7 +338,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Coin Details
           Expanded(
             child: Column(
@@ -323,16 +349,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                     Text(
                       holding.coinSymbol,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       holding.coinName,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.6),
+                          ),
                     ),
                   ],
                 ),
@@ -340,13 +369,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 Text(
                   '${Helpers.formatAmount(holding.amount)} ${holding.coinSymbol}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withValues(alpha: 0.6),
+                      ),
                 ),
               ],
             ),
           ),
-          
+
           // Values
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -354,9 +386,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               Text(
                 Helpers.formatCurrency(holding.totalValue, _settings.currency),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
               ),
               const SizedBox(height: 4),
               Row(
@@ -364,16 +396,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 children: [
                   Icon(
                     Helpers.getProfitLossIcon(holding.profitLoss),
-                    color: Helpers.getProfitLossColor(holding.profitLoss, _settings.isDarkMode),
+                    color: Helpers.getProfitLossColor(
+                        holding.profitLoss, _settings.isDarkMode),
                     size: 16,
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    Helpers.formatCurrency(holding.profitLoss, _settings.currency),
+                    Helpers.formatCurrency(
+                        holding.profitLoss, _settings.currency),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Helpers.getProfitLossColor(holding.profitLoss, _settings.isDarkMode),
-                      fontWeight: FontWeight.w500,
-                    ),
+                          color: Helpers.getProfitLossColor(
+                              holding.profitLoss, _settings.isDarkMode),
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                 ],
               ),
@@ -391,21 +426,28 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           Icon(
             Icons.pie_chart_outline,
             size: 64,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'No holdings to analyze',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
           ),
           const SizedBox(height: 8),
           Text(
             'Add some transactions to see your analytics',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
+                ),
           ),
         ],
       ),

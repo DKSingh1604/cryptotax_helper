@@ -65,7 +65,25 @@ CryptoTax Helper is a comprehensive Flutter mobile application designed to simpl
 
 ## 📱 Screenshots
 
-*Coming Soon - Screenshots will be added after UI implementation*
+Here are some screens from the app. Images are stored in the `ss/` folder.
+
+<p align="center">
+  <img src="ss/signin_screen.png" alt="Sign In" width="240" />
+  <img src="ss/signup_screen.png" alt="Sign Up" width="240" />
+  <img src="ss/dashboard_screen.png" alt="Dashboard" width="240" />
+</p>
+
+<p align="center">
+  <img src="ss/transactions_screen.png" alt="Transactions" width="240" />
+  <img src="ss/add_transaction_screen.png" alt="Add Transaction" width="240" />
+  <img src="ss/analytics_screen.png" alt="Analytics" width="240" />
+</p>
+
+<p align="center">
+  <img src="ss/analytics1_screen.png" alt="Analytics (Alt)" width="240" />
+  <img src="ss/settings_screen.png" alt="Settings" width="240" />
+  <img src="ss/settings1_screen.png" alt="Settings (Alt)" width="240" />
+</p>
 
 ## 🚀 Getting Started
 

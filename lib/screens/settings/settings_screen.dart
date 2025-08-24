@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,6 +24,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   final _taxRateController = TextEditingController();
   final _repository = CryptoRepository();
   bool _isLoading = true;
+  StreamSubscription<User?>? _authSub;
+  StreamSubscription<UserSettings?>? _settingsSub;
 
   @override
   bool get wantKeepAlive => true;
@@ -31,17 +34,23 @@ class _SettingsScreenState extends State<SettingsScreen>
   void initState() {
     super.initState();
     _loadSettings();
+    // Keep profile info reactive to auth changes
+    _authSub = _repository.authStateChanges.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _taxRateController.dispose();
+    _authSub?.cancel();
+    _settingsSub?.cancel();
     super.dispose();
   }
 
   Future<void> _loadSettings() async {
     try {
-      _repository.getUserSettings().listen((settings) {
+      _settingsSub = _repository.getUserSettings().listen((settings) {
         if (settings != null && mounted) {
           setState(() {
             _settings = settings;
@@ -96,7 +105,8 @@ class _SettingsScreenState extends State<SettingsScreen>
               } catch (e) {
                 Navigator.pop(context);
                 if (mounted) {
-                  Helpers.showSnackBar(context, 'Error logging out: $e', isError: true);
+                  Helpers.showSnackBar(context, 'Error logging out: $e',
+                      isError: true);
                 }
               }
             },
@@ -193,6 +203,27 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildProfileSection() {
+    final user = _repository.currentUser;
+    final displayName = (user?.displayName ?? '').trim();
+    final email = (user?.email ?? '').trim();
+    final photoUrl = (user?.photoURL ?? '').trim();
+
+    String fallbackName;
+    if (displayName.isNotEmpty) {
+      fallbackName = displayName;
+    } else if (email.isNotEmpty) {
+      fallbackName = email.split('@').first;
+    } else {
+      fallbackName = 'Your Account';
+    }
+
+    String avatarLetter = '?';
+    if (displayName.isNotEmpty) {
+      avatarLetter = displayName.substring(0, 1).toUpperCase();
+    } else if (email.isNotEmpty) {
+      avatarLetter = email.substring(0, 1).toUpperCase();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -215,11 +246,18 @@ class _SettingsScreenState extends State<SettingsScreen>
               CircleAvatar(
                 radius: 30,
                 backgroundColor: Theme.of(context).colorScheme.primary,
-                child: Icon(
-                  Icons.person,
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  size: 40,
-                ),
+                backgroundImage:
+                    photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                child: photoUrl.isEmpty
+                    ? Text(
+                        avatarLetter,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -227,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Crypto Trader',
+                      fallbackName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).colorScheme.onSurface,
@@ -235,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'trader@cryptotax.com',
+                      email.isNotEmpty ? email : 'No email',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
@@ -247,10 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               IconButton(
-                onPressed: () {
-                  // TODO: Implement edit profile
-                  Helpers.showSnackBar(context, 'Edit profile coming soon!');
-                },
+                onPressed: _showEditProfileDialog,
                 icon: Icon(
                   Icons.edit,
                   color: Theme.of(context).colorScheme.primary,
@@ -260,6 +295,87 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
         ),
       ],
+    );
+  }
+
+  void _showEditProfileDialog() {
+    final user = _repository.currentUser;
+    final nameController = TextEditingController(text: user?.displayName ?? '');
+    final photoController = TextEditingController(text: user?.photoURL ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Profile'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Display Name',
+                ),
+                validator: (v) {
+                  if (v == null) return null;
+                  if (v.length > 50) return 'Name too long';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: photoController,
+                decoration: const InputDecoration(
+                  labelText: 'Photo URL (optional)',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return null;
+                  final uri = Uri.tryParse(v);
+                  if (uri == null ||
+                      (!uri.isScheme('http') && !uri.isScheme('https'))) {
+                    return 'Enter a valid http(s) URL';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              try {
+                await _repository.updateProfile(
+                  displayName: nameController.text.trim().isEmpty
+                      ? null
+                      : nameController.text.trim(),
+                  photoUrl: photoController.text.trim().isEmpty
+                      ? null
+                      : photoController.text.trim(),
+                );
+                if (mounted) {
+                  Navigator.pop(context);
+                  Helpers.showSnackBar(context, 'Profile updated');
+                  setState(() {});
+                }
+              } catch (e) {
+                if (mounted) {
+                  Helpers.showSnackBar(context, 'Error updating profile: $e',
+                      isError: true);
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -635,9 +751,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               // This is a dangerous operation, so we'll just show a warning
               if (mounted) {
                 Helpers.showSnackBar(
-                  context, 
-                  'Clear data functionality would delete your entire account. Use logout instead.', 
-                  isError: true
+                  context,
+                  'Clear data functionality would delete your entire account. Use logout instead.',
+                  isError: true,
                 );
               }
             },
@@ -653,7 +769,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Widget _buildAccountSection() {
     final user = _repository.currentUser;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -665,7 +781,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
         ),
         const SizedBox(height: 16),
-        
+
         // User Info
         if (user != null) ...[
           Container(
@@ -709,36 +825,22 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           const SizedBox(height: 16),
         ],
-        
+
         // Logout Button
-        Container(
+        SizedBox(
           width: double.infinity,
-          padding: AppConstants.cardPadding,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
-          ),
-          child: InkWell(
-            onTap: _logout,
-            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.logout,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Logout',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
+          child: ElevatedButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+            label: const Text('Logout'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppConstants.borderRadius),
               ),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
         ),

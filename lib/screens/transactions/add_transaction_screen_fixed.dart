@@ -363,7 +363,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
         TextFormField(
           controller: _amountController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => setState(() {}),
           validator: (value) {
             if (value == null || value.isEmpty) {
               return AppStrings.fieldRequired;
@@ -400,7 +399,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
         TextFormField(
           controller: _priceController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onChanged: (_) => setState(() {}),
           validator: (value) {
             if (value == null || value.isEmpty) {
               return AppStrings.fieldRequired;

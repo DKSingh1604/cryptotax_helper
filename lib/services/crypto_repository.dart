@@ -4,12 +4,12 @@ import 'package:cryptotax_helper/models/portfolio.dart';
 import 'package:cryptotax_helper/models/user_settings.dart';
 import 'package:cryptotax_helper/services/firebase_auth_service.dart';
 import 'package:cryptotax_helper/services/firestore_service.dart';
-import 'package:cryptotax_helper/services/mock_data_service.dart';
+import 'package:cryptotax_helper/services/market_data_service.dart';
 
 class CryptoRepository {
   final FirebaseAuthService _authService = FirebaseAuthService();
   final FirestoreService _firestoreService = FirestoreService();
-  final MockDataService _mockDataService = MockDataService();
+  final MarketDataService _marketData = MarketDataService();
 
   // Authentication methods
   Future<UserCredential?> signUp({
@@ -25,10 +25,8 @@ class CryptoRepository {
 
     if (credential?.user != null) {
       await _firestoreService.createUserDocument(credential!.user!);
-      
-      // Initialize user with default settings and sample data
+      // Initialize user with default settings; no mock data
       await saveUserSettings(UserSettings());
-      await _initializeUserData();
     }
 
     return credential;
@@ -61,13 +59,24 @@ class CryptoRepository {
   String getAuthErrorMessage(FirebaseAuthException e) =>
       _authService.getAuthErrorMessage(e);
 
+  Future<void> updateProfile({String? displayName, String? photoUrl}) async {
+    await _authService.updateUserProfile(
+        displayName: displayName, photoUrl: photoUrl);
+    final user = _authService.currentUser;
+    if (user != null) {
+      // mirror the changes in Firestore user document
+      await _firestoreService.createUserDocument(user);
+    }
+  }
+
   // AppTransaction.Transaction methods
   Future<void> addTransaction(AppTransaction.Transaction transaction) async {
     await _firestoreService.addTransaction(transaction);
     await _updatePortfolioCalculations();
   }
 
-  Future<void> updateTransaction(String transactionId, AppTransaction.Transaction transaction) async {
+  Future<void> updateTransaction(
+      String transactionId, AppTransaction.Transaction transaction) async {
     await _firestoreService.updateTransaction(transactionId, transaction);
     await _updatePortfolioCalculations();
   }
@@ -80,7 +89,9 @@ class CryptoRepository {
   Stream<List<AppTransaction.Transaction>> getUserTransactions({int? limit}) =>
       _firestoreService.getUserTransactions(limit: limit);
 
-  Stream<List<AppTransaction.Transaction>> getTransactionsByCoin(String coinSymbol, {int? limit}) =>
+  Stream<List<AppTransaction.Transaction>> getTransactionsByCoin(
+          String coinSymbol,
+          {int? limit}) =>
       _firestoreService.getTransactionsByCoin(coinSymbol, limit: limit);
 
   // Portfolio methods
@@ -90,7 +101,8 @@ class CryptoRepository {
   Future<void> saveUserSettings(UserSettings settings) =>
       _firestoreService.saveUserSettings(settings);
 
-  Stream<UserSettings?> getUserSettings() => _firestoreService.getUserSettings();
+  Stream<UserSettings?> getUserSettings() =>
+      _firestoreService.getUserSettings();
 
   // Account management
   Future<void> deleteAccount() async {
@@ -99,88 +111,93 @@ class CryptoRepository {
   }
 
   // Helper methods
-  Future<void> _initializeUserData() async {
-    // Add some sample transactions for new users
-    final sampleTransactions = MockDataService.generateMockTransactions(count: 5);
-    for (final transaction in sampleTransactions.take(5)) {
-      await _firestoreService.addTransaction(transaction);
-    }
-    
-    // Update portfolio with initial calculations
-    await _updatePortfolioCalculations();
-  }
+  // Removed mock data initialization
 
   Future<void> _updatePortfolioCalculations() async {
     // Get all user transactions
     final transactionsSnapshot = await getUserTransactions().first;
-    
+
     if (transactionsSnapshot.isEmpty) return;
 
-    // Calculate portfolio from transactions
-    final portfolio = _calculatePortfolioFromTransactions(transactionsSnapshot);
-    
+    // Calculate portfolio from transactions with live prices
+    final portfolio =
+        await _calculatePortfolioFromTransactions(transactionsSnapshot);
+
     // Save updated portfolio
     await _firestoreService.updatePortfolio(portfolio);
   }
 
-  Portfolio _calculatePortfolioFromTransactions(List<AppTransaction.Transaction> transactions) {
-    final Map<String, CoinHolding> holdingsMap = {};
-    double totalValue = 0;
-    double totalCostBasis = 0;
+  Future<Portfolio> _calculatePortfolioFromTransactions(
+      List<AppTransaction.Transaction> transactions) async {
+    final Map<String, double> positions = {}; // symbol -> net amount
+    final Map<String, double> costBasis = {}; // symbol -> sum(cost)
 
-    // Process each transaction to calculate current holdings
-    for (final transaction in transactions) {
-      final key = transaction.coinSymbol;
-      final currentHolding = holdingsMap[key];
-      
-      if (currentHolding == null) {
-        // First transaction for this coin
-        holdingsMap[key] = CoinHolding(
-          coinName: transaction.coinName,
-          coinSymbol: transaction.coinSymbol,
-          amount: transaction.type == AppTransaction.TransactionType.buy ? transaction.amount : -transaction.amount,
-          currentPrice: transaction.pricePerUnit,
-          profitLoss: 0,
-          percentage: 0,
-        );
+    for (final t in transactions) {
+      final sym = t.coinSymbol.toUpperCase();
+      final signedAmount =
+          t.type == AppTransaction.TransactionType.buy ? t.amount : -t.amount;
+      positions[sym] = (positions[sym] ?? 0) + signedAmount;
+      // Track cost basis (very simplified; ignores lots/fees)
+      if (t.type == AppTransaction.TransactionType.buy) {
+        costBasis[sym] = (costBasis[sym] ?? 0) + (t.amount * t.pricePerUnit);
       } else {
-        // Update existing holding
-        final newAmount = currentHolding.amount + 
-            (transaction.type == AppTransaction.TransactionType.buy ? transaction.amount : -transaction.amount);
-        
-        holdingsMap[key] = CoinHolding(
-          coinName: transaction.coinName,
-          coinSymbol: transaction.coinSymbol,
-          amount: newAmount,
-          currentPrice: transaction.pricePerUnit, // Use latest price
-          profitLoss: currentHolding.profitLoss,
-          percentage: 0, // Will be calculated later
-        );
+        costBasis[sym] = (costBasis[sym] ?? 0) - (t.amount * t.pricePerUnit);
       }
     }
 
-    // Calculate portfolio metrics
-    final holdings = holdingsMap.values.where((h) => h.amount > 0).toList();
-    totalValue = holdings.fold(0, (sum, holding) => sum + holding.totalValue);
-    
-    // Calculate percentages and profit/loss
-    final updatedHoldings = holdings.map((holding) {
-      final percentage = totalValue > 0 ? (holding.totalValue / totalValue) * 100 : 0.0;
-      // Simplified profit/loss calculation (would need more complex logic with real data)
-      final profitLoss = holding.totalValue * 0.1; // Mock 10% profit
-      
+    // Filter positive holdings
+    final heldSymbols =
+        positions.entries.where((e) => e.value > 0).map((e) => e.key).toList();
+    if (heldSymbols.isEmpty) {
+      return Portfolio(
+        totalValue: 0,
+        totalProfitLoss: 0,
+        estimatedTaxDue: 0,
+        holdings: [],
+        recentTransactions: transactions.take(10).toList(),
+      );
+    }
+
+    // Get live prices
+    final prices = await _marketData.getPricesUsd(heldSymbols);
+
+    double totalValue = 0.0;
+    final List<CoinHolding> holdings = [];
+    for (final sym in heldSymbols) {
+      final amount = positions[sym] ?? 0;
+      final price = prices[sym] ?? 0;
+      final value = amount * price;
+      totalValue += value;
+      final basis = costBasis[sym] ?? 0;
+      final pnl = value - basis; // extremely simplified PnL
+      holdings.add(CoinHolding(
+        coinName: sym, // Optionally map to full name later
+        coinSymbol: sym,
+        amount: amount,
+        currentPrice: price,
+        profitLoss: pnl,
+        percentage: 0, // fill later
+      ));
+    }
+
+    // Fill percentages
+    final updatedHoldings = holdings.map((h) {
+      final pct = totalValue > 0 ? (h.totalValue / totalValue) * 100 : 0.0;
       return CoinHolding(
-        coinName: holding.coinName,
-        coinSymbol: holding.coinSymbol,
-        amount: holding.amount,
-        currentPrice: holding.currentPrice,
-        profitLoss: profitLoss,
-        percentage: percentage,
+        coinName: h.coinName,
+        coinSymbol: h.coinSymbol,
+        amount: h.amount,
+        currentPrice: h.currentPrice,
+        profitLoss: h.profitLoss,
+        percentage: pct,
       );
     }).toList();
 
-    final totalProfitLoss = updatedHoldings.fold(0.0, (sum, h) => sum + h.profitLoss);
-    final estimatedTaxDue = totalProfitLoss > 0 ? totalProfitLoss * 0.2 : 0.0; // 20% tax rate
+    final totalProfitLoss =
+        updatedHoldings.fold(0.0, (sum, h) => sum + h.profitLoss);
+    final estimatedTaxDue = totalProfitLoss > 0
+        ? totalProfitLoss * 0.2
+        : 0.0; // placeholder tax rate
 
     return Portfolio(
       totalValue: totalValue,

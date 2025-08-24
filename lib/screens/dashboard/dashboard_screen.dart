@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cryptotax_helper/models/portfolio.dart';
 import 'package:cryptotax_helper/models/user_settings.dart';
@@ -20,7 +21,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> 
+class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
   Portfolio? _portfolio;
@@ -28,6 +29,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   List<AppTransaction.Transaction> _recentTransactions = [];
   bool _isLoading = true;
   final _repository = CryptoRepository();
+  StreamSubscription<UserSettings?>? _settingsSub;
+  StreamSubscription<Portfolio?>? _portfolioSub;
+  StreamSubscription<List<AppTransaction.Transaction>>? _txSub;
+  StreamSubscription? _authSub;
 
   late AnimationController _fadeAnimationController;
   late Animation<double> _fadeAnimation;
@@ -36,7 +41,21 @@ class _DashboardScreenState extends State<DashboardScreen>
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadData();
+    // Manage subscriptions based on auth state
+    _authSub = _repository.authStateChanges.listen((user) {
+      if (user == null) {
+        _cancelDataSubscriptions();
+        if (mounted) {
+          setState(() {
+            _portfolio = null;
+            _recentTransactions = [];
+            _isLoading = true;
+          });
+        }
+      } else {
+        _loadData();
+      }
+    });
   }
 
   void _initializeAnimations() {
@@ -55,16 +74,16 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   List<Widget> get _screens => [
-    _buildDashboardContent(),
-    TransactionsScreen(onTransactionAdded: _refreshPortfolio),
-    const AnalyticsScreen(),
-    SettingsScreen(onSettingsChanged: _onSettingsChanged),
-  ];
+        _buildDashboardContent(),
+        TransactionsScreen(onTransactionAdded: _refreshPortfolio),
+        const AnalyticsScreen(),
+        SettingsScreen(onSettingsChanged: _onSettingsChanged),
+      ];
 
   Future<void> _loadData() async {
     try {
       // Listen to user settings stream
-      _repository.getUserSettings().listen((settings) {
+      _settingsSub ??= _repository.getUserSettings().listen((settings) {
         if (settings != null && mounted) {
           setState(() {
             _settings = settings;
@@ -73,7 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
 
       // Listen to portfolio stream
-      _repository.getUserPortfolio().listen((portfolio) {
+      _portfolioSub ??= _repository.getUserPortfolio().listen((portfolio) {
         if (portfolio != null && mounted) {
           setState(() {
             _portfolio = portfolio;
@@ -84,7 +103,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
 
       // Listen to recent transactions stream
-      _repository.getUserTransactions(limit: 5).listen((transactions) {
+      _txSub ??=
+          _repository.getUserTransactions(limit: 5).listen((transactions) {
         if (mounted) {
           setState(() {
             _recentTransactions = transactions;
@@ -125,14 +145,25 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void dispose() {
     _fadeAnimationController.dispose();
+    _cancelDataSubscriptions();
+    _authSub?.cancel();
     super.dispose();
+  }
+
+  void _cancelDataSubscriptions() {
+    _settingsSub?.cancel();
+    _portfolioSub?.cancel();
+    _txSub?.cancel();
+    _settingsSub = null;
+    _portfolioSub = null;
+    _txSub = null;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      body: _isLoading 
+      body: _isLoading
           ? _buildLoadingScreen()
           : IndexedStack(
               index: _currentIndex,
@@ -163,8 +194,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           Text(
             'Loading your portfolio...',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
           ),
         ],
       ),
@@ -183,11 +217,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               // Header
               _buildHeader(),
               const SizedBox(height: 24),
-              
+
               // Summary Cards
               _buildSummaryCards(),
               const SizedBox(height: 32),
-              
+
               // Recent Transactions
               _buildRecentTransactions(),
             ],
@@ -204,16 +238,19 @@ class _DashboardScreenState extends State<DashboardScreen>
         Text(
           'Good ${_getGreeting()}!',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
         Text(
           'Here\'s your portfolio overview',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
         ),
       ],
     );
@@ -227,32 +264,37 @@ class _DashboardScreenState extends State<DashboardScreen>
         // Total Portfolio Value
         SummaryCard(
           title: AppStrings.totalPortfolioValue,
-          value: Helpers.formatCurrency(_portfolio!.totalValue, _settings.currency),
+          value: Helpers.formatCurrency(
+              _portfolio!.totalValue, _settings.currency),
           icon: Icons.account_balance_wallet_rounded,
           iconColor: Theme.of(context).colorScheme.primary,
         ),
         const SizedBox(height: 16),
-        
+
         Row(
           children: [
             // Total Profit/Loss
             Expanded(
               child: SummaryCard(
                 title: AppStrings.totalProfitLoss,
-                value: Helpers.formatCurrency(_portfolio!.totalProfitLoss, _settings.currency),
-                subtitle: Helpers.formatPercentage(_portfolio!.profitLossPercentage),
+                value: Helpers.formatCurrency(
+                    _portfolio!.totalProfitLoss, _settings.currency),
+                subtitle:
+                    Helpers.formatPercentage(_portfolio!.profitLossPercentage),
                 icon: Helpers.getProfitLossIcon(_portfolio!.totalProfitLoss),
-                iconColor: Helpers.getProfitLossColor(_portfolio!.totalProfitLoss, _settings.isDarkMode),
+                iconColor: Helpers.getProfitLossColor(
+                    _portfolio!.totalProfitLoss, _settings.isDarkMode),
                 isPositive: _portfolio!.isProfitable,
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Estimated Tax Due
             Expanded(
               child: SummaryCard(
                 title: AppStrings.estimatedTaxDue,
-                value: Helpers.formatCurrency(_portfolio!.estimatedTaxDue, _settings.currency),
+                value: Helpers.formatCurrency(
+                    _portfolio!.estimatedTaxDue, _settings.currency),
                 subtitle: '${_settings.taxRate}% rate',
                 icon: Icons.receipt_long_rounded,
                 iconColor: Theme.of(context).colorScheme.secondary,
@@ -265,7 +307,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildRecentTransactions() {
-    if (_portfolio == null || _portfolio!.recentTransactions.isEmpty) {
+    // Show empty state if there are no recent transactions
+    if (_recentTransactions.isEmpty) {
       return _buildEmptyTransactions();
     }
 
@@ -277,9 +320,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             Text(
               AppStrings.recentTransactions,
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
             ),
             TextButton(
               onPressed: () => setState(() => _currentIndex = 1),
@@ -294,14 +337,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           ],
         ),
         const SizedBox(height: 16),
-        
-        // Transaction List
+
+        // Transaction List (top 5 are already provided by the stream limit)
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _portfolio!.recentTransactions.length,
+          itemCount: _recentTransactions.length,
           itemBuilder: (context, index) {
-            final transaction = _portfolio!.recentTransactions[index];
+            final transaction = _recentTransactions[index];
             return TransactionItem(
               transaction: transaction,
               currency: _settings.currency,
@@ -319,21 +362,28 @@ class _DashboardScreenState extends State<DashboardScreen>
           Icon(
             Icons.receipt_long_rounded,
             size: 64,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             'No transactions yet',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
           ),
           const SizedBox(height: 8),
           Text(
             'Add your first crypto transaction',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
+                ),
           ),
         ],
       ),
