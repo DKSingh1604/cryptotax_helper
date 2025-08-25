@@ -1,8 +1,14 @@
 # 🚀 CryptoTax Helper
 
+<p align="center">
+  <img src="assets/logo/logo.png" alt="CryptoTax Helper Logo" width="300" />
+  
+</p>
+
+
 **Your Ultimate Cryptocurrency Tax Tracking & Portfolio Management Solution**
 
-CryptoTax Helper is a comprehensive Flutter mobile application designed to simplify cryptocurrency tax tracking and portfolio management with an elegant, intuitive dark-themed interface.
+CryptoTax Helper is a comprehensive Flutter mobile application designed to simplify cryptocurrency tax tracking and portfolio management with an elegant, intuitive interface.
 
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=for-the-badge&logo=Firebase&logoColor=white)
